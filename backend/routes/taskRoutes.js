@@ -1,0 +1,47 @@
+/**
+ * Task Routes
+ * All routes require authentication (protect middleware).
+ */
+const express = require('express');
+const router = express.Router();
+const { body } = require('express-validator');
+const {
+  getTasks,
+  getTaskById,
+  createTask,
+  updateTask,
+  deleteTask,
+} = require('../controllers/taskController');
+const { protect } = require('../middleware/authMiddleware');
+
+// All task routes require authentication
+router.use(protect);
+
+// GET  /api/tasks       — list tasks (filtered by role)
+router.get('/', getTasks);
+
+// GET  /api/tasks/:id   — get a single task
+router.get('/:id', getTaskById);
+
+// POST /api/tasks       — create a task
+router.post(
+  '/',
+  [
+    body('title').trim().notEmpty().withMessage('Title is required'),
+  ],
+  createTask
+);
+
+// PUT  /api/tasks/:id   — update a task
+router.put(
+  '/:id',
+  [
+    body('title').trim().notEmpty().withMessage('Title is required'),
+  ],
+  updateTask
+);
+
+// DELETE /api/tasks/:id — delete a task
+router.delete('/:id', deleteTask);
+
+module.exports = router;

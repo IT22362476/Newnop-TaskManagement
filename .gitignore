@@ -1,0 +1,60 @@
+# =============================================================
+# .gitignore — Task Management System
+# =============================================================
+
+# -------------------- Node.js --------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# -------------------- Environment Files --------------------
+.env
+.env.local
+.env.production
+.env.development
+*.env
+
+# -------------------- Backend --------------------
+backend/node_modules/
+backend/.env
+
+# -------------------- Frontend --------------------
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# -------------------- IDE & Editor --------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# -------------------- OS Files --------------------
+.DS_Store
+Thumbs.db
+*.log
+
+# -------------------- Terraform --------------------
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfstate.*.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+*.tfvars
+
+# -------------------- n8n --------------------
+n8n/.n8n.json
+n8n/database.sqlite
+
+# -------------------- Docker --------------------
+docker-compose.override.yml
+
+# -------------------- Misc --------------------
+*.zip
+*.tar.gz
+coverage/
+.nyc_output/
