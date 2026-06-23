@@ -28,7 +28,7 @@ const registerUser = async (req, res) => {
   }
 
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, adminSecret } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -36,8 +36,18 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
+    // If an admin secret code is provided and matches, grant admin role
+    const role =
+      adminSecret && process.env.ADMIN_SECRET && adminSecret === process.env.ADMIN_SECRET
+        ? 'admin'
+        : 'user';
+
+    if (adminSecret && role !== 'admin') {
+      return res.status(400).json({ message: 'Invalid admin registration code' });
+    }
+
     // Create user
-    const user = await User.create({ name, email, password });
+    const user = await User.create({ name, email, password, role });
 
     res.status(201).json({
       _id: user._id,
@@ -100,4 +110,19 @@ const getMe = async (req, res) => {
   res.json(req.user);
 };
 
-module.exports = { registerUser, loginUser, getMe };
+/**
+ * @route   GET /api/auth/users
+ * @desc    Get all users (for admin task-assignment dropdown)
+ * @access  Private (admin only)
+ */
+const getUsers = async (req, res) => {
+  try {
+    const users = await User.find().select('_id name email role').sort({ name: 1 });
+    res.json(users);
+  } catch (error) {
+    console.error('Get users error:', error.message);
+    res.status(500).json({ message: 'Server error fetching users' });
+  }
+};
+
+module.exports = { registerUser, loginUser, getMe, getUsers };

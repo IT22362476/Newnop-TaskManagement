@@ -1,7 +1,8 @@
 /**
  * Task Model
- * Represents a task owned by a user. Each task has a title, description,
- * status, priority, and a due date.
+ * Represents a task with creator and assignee for role-based access.
+ * - createdBy: the user who created the task
+ * - assignedTo: the user the task is assigned to (admin can assign to anyone)
  */
 const mongoose = require('mongoose');
 
@@ -34,11 +35,17 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    // Reference to the user who owns this task
-    user: {
+    // The user who created the task
+    createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Task must belong to a user'],
+      required: [true, 'Task must have a creator'],
+    },
+    // The user the task is assigned to (defaults to creator for regular users)
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
   },
   {

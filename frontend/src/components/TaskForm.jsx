@@ -1,6 +1,13 @@
 /**
  * TaskForm Component
- * Modal / inline form for creating or editing a task.
+ * Modal form for creating or editing a task.
+ *
+ * Props:
+ *   initialData  — task to edit (null for new task)
+ *   onSubmit     — (data) => Promise
+ *   onCancel     — () => void
+ *   userRole     — 'admin' | 'user'
+ *   users        — array of { _id, name, email } for admin assignment dropdown
  */
 import { useState, useEffect } from 'react';
 
@@ -10,9 +17,10 @@ const INITIAL_STATE = {
   status: 'pending',
   priority: 'medium',
   dueDate: '',
+  assignedTo: '',
 };
 
-const TaskForm = ({ initialData, onSubmit, onCancel }) => {
+const TaskForm = ({ initialData, onSubmit, onCancel, userRole, users }) => {
   const [form, setForm] = useState(INITIAL_STATE);
   const [submitting, setSubmitting] = useState(false);
 
@@ -24,6 +32,7 @@ const TaskForm = ({ initialData, onSubmit, onCancel }) => {
         status: initialData.status || 'pending',
         priority: initialData.priority || 'medium',
         dueDate: initialData.dueDate ? initialData.dueDate.slice(0, 10) : '',
+        assignedTo: initialData.assignedTo?._id || initialData.assignedTo || '',
       });
     } else {
       setForm(INITIAL_STATE);
@@ -40,10 +49,20 @@ const TaskForm = ({ initialData, onSubmit, onCancel }) => {
 
     setSubmitting(true);
     try {
-      await onSubmit({
-        ...form,
+      const payload = {
+        title: form.title,
+        description: form.description,
+        status: form.status,
+        priority: form.priority,
         dueDate: form.dueDate || null,
-      });
+      };
+
+      // Admin can optionally assign to a different user
+      if (userRole === 'admin' && form.assignedTo) {
+        payload.assignedTo = form.assignedTo;
+      }
+
+      await onSubmit(payload);
     } finally {
       setSubmitting(false);
     }
@@ -76,6 +95,27 @@ const TaskForm = ({ initialData, onSubmit, onCancel }) => {
               placeholder="Optional description"
             />
           </div>
+
+          {/* Admin: user-assignment dropdown */}
+          {userRole === 'admin' && users && (
+            <div className="form-group">
+              <label htmlFor="tf-assignedTo">Assign To</label>
+              <select
+                id="tf-assignedTo"
+                name="assignedTo"
+                value={form.assignedTo}
+                onChange={handleChange}
+              >
+                <option value="">— Assign to myself —</option>
+                {users.map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.name} ({u.email}){u.role === 'admin' ? ' [Admin]' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="tf-status">Status</label>
