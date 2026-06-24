@@ -25,10 +25,16 @@ router.use(protect);
 router.get('/', getTasks);
 
 // GET  /api/tasks/stats   — task stats per user (admin only)
-router.get('/stats', authorize('admin'), getTaskStats);
+router.get('/stats', (req, res, next) => {
+  console.log("STATS ROUTE HIT");
+  next();
+}, authorize('admin'), getTaskStats);
 
 // GET  /api/tasks/:id     — get a single task
-router.get('/:id', getTaskById);
+router.get('/:id', (req, res, next) => {
+  console.log("ID ROUTE HIT:", req.params.id);
+  next();
+}, getTaskById);
 
 // POST /api/tasks         — create a task
 router.post(
