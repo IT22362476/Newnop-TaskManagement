@@ -1,13 +1,22 @@
 /**
  * Register Component
- * Renders a registration form and creates a new user.
+ * Registration form with optional admin secret code field.
+ * If an ADMIN_SECRET is configured on the server, passing it here
+ * creates the user with the 'admin' role.
  */
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    adminSecret: '',
+  });
+  const [showAdminField, setShowAdminField] = useState(false);
   const [localError, setLocalError] = useState(null);
   const { register, error, clearError } = useAuth();
   const navigate = useNavigate();
@@ -30,7 +39,16 @@ const Register = () => {
 
     setSubmitting(true);
     try {
-      await register(form.name, form.email, form.password);
+      const payload = {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+      };
+      // Only send adminSecret if the user filled it in
+      if (form.adminSecret) {
+        payload.adminSecret = form.adminSecret;
+      }
+      await register(payload.name, payload.email, payload.password, payload.adminSecret);
       navigate('/dashboard');
     } catch {
       // error is set in context
@@ -95,6 +113,37 @@ const Register = () => {
               placeholder="Repeat password"
             />
           </div>
+
+          {/* Admin registration toggle */}
+          <div className="form-group admin-toggle">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={showAdminField}
+                onChange={(e) => {
+                  setShowAdminField(e.target.checked);
+                  if (!e.target.checked) setForm((prev) => ({ ...prev, adminSecret: '' }));
+                }}
+              />
+              <span>Register as admin</span>
+            </label>
+          </div>
+
+          {showAdminField && (
+            <div className="form-group">
+              <label htmlFor="adminSecret">Admin Secret Code</label>
+              <input
+                id="adminSecret"
+                name="adminSecret"
+                type="password"
+                value={form.adminSecret}
+                onChange={handleChange}
+                placeholder="Enter admin registration code"
+              />
+              <p className="form-hint">Ask your administrator for the secret code.</p>
+            </div>
+          )}
+
           <button type="submit" className="btn btn-primary" disabled={submitting}>
             {submitting ? 'Creating account…' : 'Create Account'}
           </button>

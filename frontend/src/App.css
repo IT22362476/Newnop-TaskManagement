@@ -157,6 +157,36 @@ a:hover {
   color: #6b7280;
 }
 
+/* ---------- Admin Toggle ---------- */
+.admin-toggle {
+  margin-top: 8px;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+.form-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ---------- User Count Badge ---------- */
+.user-count {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-left: 4px;
+}
+
 /* ---------- Form Controls ---------- */
 .form-group {
   margin-bottom: 16px;

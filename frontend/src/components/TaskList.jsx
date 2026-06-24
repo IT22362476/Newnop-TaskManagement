@@ -1,8 +1,12 @@
 /**
  * TaskList Component
- * Renders a table/list of tasks with edit and delete actions.
+ * Renders a table of tasks with role-aware actions.
+ *
+ * Admin sees: Created By + Assigned To columns, can edit/delete any task
+ * User sees:  only their own + assigned tasks, can edit if owner/assignee, delete only if creator
  */
 import { useTasks } from '../context/TaskContext';
+import { useAuth } from '../context/AuthContext';
 
 const priorityClass = (p) => {
   if (p === 'high') return 'badge badge-danger';
@@ -16,8 +20,10 @@ const statusClass = (s) => {
   return 'badge badge-secondary';
 };
 
-const TaskList = ({ onEdit, userRole }) => {
+const TaskList = ({ onEdit }) => {
+  const { user } = useAuth();
   const { tasks, loading, error, deleteTask, fetchTasks } = useTasks();
+  const isAdmin = user?.role === 'admin';
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this task?')) return;
@@ -53,31 +59,56 @@ const TaskList = ({ onEdit, userRole }) => {
             <th>Status</th>
             <th>Priority</th>
             <th>Due Date</th>
-            {userRole === 'admin' && <th>Owner</th>}
+            {isAdmin && <th>Created By</th>}
+            {isAdmin && <th>Assigned To</th>}
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {tasks.map((task) => (
-            <tr key={task._id}>
-              <td>
-                <strong>{task.title}</strong>
-                {task.description && <p className="task-desc">{task.description}</p>}
-              </td>
-              <td><span className={statusClass(task.status)}>{task.status}</span></td>
-              <td><span className={priorityClass(task.priority)}>{task.priority}</span></td>
-              <td>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '—'}</td>
-              {userRole === 'admin' && <td>{task.user?.name || 'Unknown'}</td>}
-              <td className="actions-cell">
-                <button className="btn btn-sm btn-secondary" onClick={() => onEdit(task)}>
-                  Edit
-                </button>
-                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(task._id)}>
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
+          {tasks.map((task) => {
+            const isCreator = task.createdBy?._id === user?._id;
+            const isAssignee = task.assignedTo?._id === user?._id;
+            const canEdit = isAdmin || isCreator || isAssignee;
+            const canDelete = isAdmin || isCreator;
+
+            return (
+              <tr key={task._id}>
+                <td>
+                  <strong>{task.title}</strong>
+                  {task.description && <p className="task-desc">{task.description}</p>}
+                </td>
+                <td><span className={statusClass(task.status)}>{task.status}</span></td>
+                <td><span className={priorityClass(task.priority)}>{task.priority}</span></td>
+                <td>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '—'}</td>
+                {isAdmin && <td>{task.createdBy?.name || 'Unknown'}</td>}
+                {isAdmin && (
+                  <td>
+                    {task.assignedTo
+                      ? `${task.assignedTo.name}`
+                      : '—'}
+                  </td>
+                )}
+                <td className="actions-cell">
+                  <button
+                    className="btn btn-sm btn-secondary"
+                    onClick={() => onEdit(task)}
+                    disabled={!canEdit}
+                    title={!canEdit ? 'You can only edit tasks you created or are assigned to' : ''}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleDelete(task._id)}
+                    disabled={!canDelete}
+                    title={!canDelete ? 'You can only delete tasks you created' : ''}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

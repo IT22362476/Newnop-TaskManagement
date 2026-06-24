@@ -1,11 +1,14 @@
 /**
  * TaskDashboard Component
- * Main dashboard page after login. Shows task list, create/edit modals.
+ * Main dashboard page after login. Role-aware:
+ *   Admin — "All Tasks" header, can assign tasks to any user
+ *   User  — "My Tasks" header, tasks auto-assigned to self
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTasks, TaskProvider } from '../context/TaskContext';
+import { getUsers } from '../services/api';
 import TaskList from './TaskList';
 import TaskForm from './TaskForm';
 
@@ -13,14 +16,25 @@ const DashboardInner = () => {
   const { user, logout } = useAuth();
   const { fetchTasks, createTask, updateTask, error, clearError } = useTasks();
   const navigate = useNavigate();
+  const isAdmin = user?.role === 'admin';
 
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [users, setUsers] = useState([]);
 
   // Fetch tasks on mount
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // Admin: fetch all users for assignment dropdown
+  useEffect(() => {
+    if (isAdmin) {
+      getUsers()
+        .then((res) => setUsers(res.data))
+        .catch((err) => console.error('Failed to load users:', err));
+    }
+  }, [isAdmin]);
 
   const handleLogout = useCallback(() => {
     logout();
@@ -58,12 +72,15 @@ const DashboardInner = () => {
       {/* Header */}
       <header className="dashboard-header">
         <div>
-          <h1>Task Manager</h1>
+          <h1>{isAdmin ? 'All Tasks' : 'My Tasks'}</h1>
           <p className="user-info">
             Welcome, <strong>{user?.name}</strong>
-            <span className={`badge ${user?.role === 'admin' ? 'badge-primary' : 'badge-info'}`}>
+            <span className={`badge ${isAdmin ? 'badge-primary' : 'badge-info'}`}>
               {user?.role}
             </span>
+            {isAdmin && users.length > 0 && (
+              <span className="user-count">{users.length} user{users.length !== 1 ? 's' : ''} in system</span>
+            )}
           </p>
         </div>
         <div className="header-actions">
@@ -80,7 +97,7 @@ const DashboardInner = () => {
       {error && <div className="alert alert-error">{error}</div>}
 
       {/* Task List */}
-      <TaskList onEdit={openEdit} userRole={user?.role} />
+      <TaskList onEdit={openEdit} />
 
       {/* Create/Edit Modal */}
       {showForm && (
@@ -88,17 +105,14 @@ const DashboardInner = () => {
           initialData={editingTask}
           onSubmit={handleSubmit}
           onCancel={closeForm}
+          userRole={user?.role}
+          users={users}
         />
       )}
     </div>
   );
 };
 
-/**
- * Wraps DashboardInner in TaskProvider so the dashboard
- * has its own task state. If you need tasks accessible
- * outside the dashboard, move TaskProvider higher in the tree.
- */
 const TaskDashboard = () => (
   <TaskProvider>
     <DashboardInner />

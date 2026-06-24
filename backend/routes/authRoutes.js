@@ -4,8 +4,8 @@
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
-const { registerUser, loginUser, getMe } = require('../controllers/authController');
-const { protect } = require('../middleware/authMiddleware');
+const { registerUser, loginUser, getMe, getUsers } = require('../controllers/authController');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 // POST /api/auth/register
 router.post(
@@ -32,5 +32,8 @@ router.post(
 
 // GET /api/auth/me
 router.get('/me', protect, getMe);
+
+// GET /api/auth/users — admin only (for task assignment dropdown)
+router.get('/users', protect, authorize('admin'), getUsers);
 
 module.exports = router;

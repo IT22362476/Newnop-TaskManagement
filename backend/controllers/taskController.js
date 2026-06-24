@@ -1,14 +1,20 @@
 /**
  * Task Controller
- * Handles all CRUD operations for tasks.
- * Role-based filtering: Admins see all tasks; regular users see only their own.
+ * Handles all CRUD operations with full role-based access control.
+ *
+ * Rules:
+ *   Admin  → can read/update/delete ANY task, assign to ANY user
+ *   User   → can read/update tasks they created OR are assigned to;
+ *             can ONLY delete tasks they created;
+ *             can ONLY assign tasks to themselves
  */
 const { validationResult } = require('express-validator');
 const Task = require('../models/Task');
+const User = require('../models/User');
 
 /**
  * @route   GET /api/tasks
- * @desc    Get all tasks (admin sees all; user sees only their own)
+ * @desc    Get all tasks (admin sees ALL; user sees own + assigned)
  * @access  Private
  */
 const getTasks = async (req, res) => {
@@ -16,11 +22,22 @@ const getTasks = async (req, res) => {
     let tasks;
 
     if (req.user.role === 'admin') {
-      // Admin: fetch all tasks, populate user info
-      tasks = await Task.find().populate('user', 'name email').sort({ createdAt: -1 });
+      // Admin: fetch all tasks, populate creator and assignee info
+      tasks = await Task.find()
+        .populate('createdBy', 'name email')
+        .populate('assignedTo', 'name email')
+        .sort({ createdAt: -1 });
     } else {
-      // Regular user: fetch only their tasks
-      tasks = await Task.find({ user: req.user._id }).sort({ createdAt: -1 });
+      // Regular user: tasks they created OR are assigned to
+      tasks = await Task.find({
+        $or: [
+          { createdBy: req.user._id },
+          { assignedTo: req.user._id },
+        ],
+      })
+        .populate('createdBy', 'name email')
+        .populate('assignedTo', 'name email')
+        .sort({ createdAt: -1 });
     }
 
     res.json(tasks);
@@ -37,21 +54,30 @@ const getTasks = async (req, res) => {
  */
 const getTaskById = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id).populate('user', 'name email');
+    const task = await Task.findById(req.params.id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email');
 
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check ownership or admin
-    if (task.user._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+    // Admin can view any task
+    if (req.user.role === 'admin') {
+      return res.json(task);
+    }
+
+    // Regular user: can view only if created by them or assigned to them
+    const isCreator = task.createdBy && task.createdBy._id.toString() === req.user._id.toString();
+    const isAssignee = task.assignedTo && task.assignedTo._id.toString() === req.user._id.toString();
+
+    if (!isCreator && !isAssignee) {
       return res.status(403).json({ message: 'Not authorized to view this task' });
     }
 
     res.json(task);
   } catch (error) {
     console.error('Get task by ID error:', error.message);
-    // Handle invalid ObjectId format
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -63,6 +89,9 @@ const getTaskById = async (req, res) => {
  * @route   POST /api/tasks
  * @desc    Create a new task
  * @access  Private
+ *
+ * Admin: can optionally set assignedTo to any user
+ * User:  assignedTo defaults to themselves (hidden field)
  */
 const createTask = async (req, res) => {
   const errors = validationResult(req);
@@ -71,7 +100,25 @@ const createTask = async (req, res) => {
   }
 
   try {
-    const { title, description, status, priority, dueDate } = req.body;
+    const { title, description, status, priority, dueDate, assignedTo } = req.body;
+
+    let targetAssignee;
+
+    if (req.user.role === 'admin') {
+      // Admin can assign to any user; if none provided, assign to self
+      if (assignedTo) {
+        const targetUser = await User.findById(assignedTo);
+        if (!targetUser) {
+          return res.status(400).json({ message: 'Assigned user not found' });
+        }
+        targetAssignee = assignedTo;
+      } else {
+        targetAssignee = req.user._id;
+      }
+    } else {
+      // Regular user: always assigned to self
+      targetAssignee = req.user._id;
+    }
 
     const task = await Task.create({
       title,
@@ -79,10 +126,16 @@ const createTask = async (req, res) => {
       status,
       priority,
       dueDate,
-      user: req.user._id,
+      createdBy: req.user._id,
+      assignedTo: targetAssignee,
     });
 
-    res.status(201).json(task);
+    // Return with populated fields
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email');
+
+    res.status(201).json(populatedTask);
   } catch (error) {
     console.error('Create task error:', error.message);
     res.status(500).json({ message: 'Server error creating task' });
@@ -93,6 +146,9 @@ const createTask = async (req, res) => {
  * @route   PUT /api/tasks/:id
  * @desc    Update an existing task
  * @access  Private
+ *
+ * Admin:  can update ANY task
+ * User:   can update only if createdBy or assignedTo matches
  */
 const updateTask = async (req, res) => {
   const errors = validationResult(req);
@@ -107,12 +163,17 @@ const updateTask = async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check ownership or admin
-    if (task.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Not authorized to update this task' });
+    // Check permissions
+    if (req.user.role !== 'admin') {
+      const isCreator = task.createdBy.toString() === req.user._id.toString();
+      const isAssignee = task.assignedTo && task.assignedTo.toString() === req.user._id.toString();
+
+      if (!isCreator && !isAssignee) {
+        return res.status(403).json({ message: 'Not authorized to update this task' });
+      }
     }
 
-    const { title, description, status, priority, dueDate } = req.body;
+    const { title, description, status, priority, dueDate, assignedTo } = req.body;
 
     task.title = title ?? task.title;
     task.description = description ?? task.description;
@@ -120,9 +181,27 @@ const updateTask = async (req, res) => {
     task.priority = priority ?? task.priority;
     task.dueDate = dueDate ?? task.dueDate;
 
+    // Admin can reassign; regular user cannot change assignment
+    if (req.user.role === 'admin' && assignedTo !== undefined) {
+      if (assignedTo) {
+        const targetUser = await User.findById(assignedTo);
+        if (!targetUser) {
+          return res.status(400).json({ message: 'Assigned user not found' });
+        }
+        task.assignedTo = assignedTo;
+      } else {
+        // Unassign — fall back to creator
+        task.assignedTo = task.createdBy;
+      }
+    }
+
     const updatedTask = await task.save();
 
-    res.json(updatedTask);
+    const populatedTask = await Task.findById(updatedTask._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email');
+
+    res.json(populatedTask);
   } catch (error) {
     console.error('Update task error:', error.message);
     if (error.kind === 'ObjectId') {
@@ -136,6 +215,9 @@ const updateTask = async (req, res) => {
  * @route   DELETE /api/tasks/:id
  * @desc    Delete a task
  * @access  Private
+ *
+ * Admin: can delete ANY task
+ * User:  can ONLY delete tasks they created (not just assigned)
  */
 const deleteTask = async (req, res) => {
   try {
@@ -145,13 +227,18 @@ const deleteTask = async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check ownership or admin
-    if (task.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Not authorized to delete this task' });
+    // Admin can delete any task
+    if (req.user.role === 'admin') {
+      await task.deleteOne();
+      return res.json({ message: 'Task removed successfully' });
+    }
+
+    // Regular user: can only delete tasks they created
+    if (task.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete this task — you can only delete tasks you created' });
     }
 
     await task.deleteOne();
-
     res.json({ message: 'Task removed successfully' });
   } catch (error) {
     console.error('Delete task error:', error.message);
