@@ -121,11 +121,16 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      - name: Create .env.production with API URL
+        run: |
+          echo "VITE_API_URL=${{ vars.VITE_API_URL }}" > .env.production
+          echo "Using API URL: ${{ vars.VITE_API_URL }}"
+        working-directory: frontend
+        shell: bash
+
       - name: Build
         run: npm run build
         working-directory: frontend
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
@@ -135,3 +140,4 @@ jobs:
           action: upload
           app_location: frontend
           output_location: dist
+          
