@@ -100,6 +100,37 @@ jobs:
             ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:latest
             ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:${{ github.sha }}
 
+  # ---------- Restart Backend (force pull of new container) ----------
+  restart-backend:
+    name: Restart Backend
+    needs: [build-and-push]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Restart App Service via Kudu API
+        run: |
+          # Save publish profile and extract credentials
+          cat > /tmp/publish.xml << 'ENDOFXML'
+          ${{ secrets.AZURE_BACKEND_PUBLISH_PROFILE }}
+          ENDOFXML
+
+          # Extract values (userName includes leading $, keep it as-is)
+          SCM_URL=$(grep -oP 'publishUrl="https://\K[^"]+' /tmp/publish.xml | head -1 | sed 's/:443//')
+          CREDS=$(grep -oP '(?<=userName=")([^"]+)' /tmp/publish.xml | head -1)
+          CREDS="$CREDS:$(grep -oP '(?<=userPWD=")([^"]+)' /tmp/publish.xml | head -1)"
+          rm -f /tmp/publish.xml
+
+          echo "Restarting via $SCM_URL..."
+          # Use --netrc-file to avoid shell escaping issues with $
+          echo "machine ${SCM_URL} login ${CREDS%%:*} password ${CREDS#*:}" > /tmp/netrc
+          chmod 600 /tmp/netrc
+          curl -s -X POST "https://${SCM_URL}/api/restart" \
+            --netrc-file /tmp/netrc --max-time 120
+          rm -f /tmp/netrc
+          echo "Restart triggered successfully"
+        shell: bash
+
   # ---------- Deploy Frontend to Azure Static Web Apps ----------
   deploy-frontend:
     name: Deploy Frontend
