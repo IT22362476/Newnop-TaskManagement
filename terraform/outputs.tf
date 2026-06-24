@@ -12,6 +12,16 @@ output "frontend_url" {
   value       = azurerm_static_web_app.frontend.default_host_name
 }
 
+output "acr_login_server" {
+  description = "Azure Container Registry login server"
+  value       = azurerm_container_registry.main.login_server
+}
+
+output "acr_admin_username" {
+  description = "ACR admin username (for GitHub Actions)"
+  value       = azurerm_container_registry.main.admin_username
+}
+
 output "resource_group_name" {
   description = "The name of the created Resource Group"
   value       = azurerm_resource_group.main.name

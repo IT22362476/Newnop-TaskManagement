@@ -7,7 +7,7 @@
  *
  * Usage:
  *   terraform init
- *   terraform plan -var="app_name=my-taskmanager" -var="resource_group_name=rg-taskmanager"
+ *   terraform plan
  *   terraform apply
  */
 
@@ -43,7 +43,17 @@ resource "azurerm_resource_group" "main" {
   tags     = var.tags
 }
 
-# -------------------- App Service Plan --------------------
+# -------------------- Azure Container Registry --------------------
+resource "azurerm_container_registry" "main" {
+  name                = "${replace(var.app_name, "-", "")}acr${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "Basic"
+  admin_enabled       = true
+  tags                = var.tags
+}
+
+# -------------------- App Service Plan (Linux) --------------------
 resource "azurerm_service_plan" "main" {
   name                = "${var.app_name}-plan-${random_string.suffix.result}"
   location            = azurerm_resource_group.main.location
@@ -53,7 +63,7 @@ resource "azurerm_service_plan" "main" {
   tags                = var.tags
 }
 
-# -------------------- App Service (Backend) --------------------
+# -------------------- App Service (Backend — Container) --------------------
 resource "azurerm_linux_web_app" "backend" {
   name                = "${var.app_name}-api-${random_string.suffix.result}"
   location            = azurerm_resource_group.main.location
@@ -61,24 +71,51 @@ resource "azurerm_linux_web_app" "backend" {
   service_plan_id     = azurerm_service_plan.main.id
   https_only          = true
 
+  # User-assigned managed identity — used to pull images from ACR
+  identity {
+    type = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.backend.id]
+  }
+
   site_config {
+    always_on  = var.app_service_sku != "F1" ? true : false
+    ftps_state = "Disabled"
+
+    # Pull container from ACR using managed identity (no credentials needed)
     application_stack {
-      node_version = "20-lts"
+      docker_image_name   = "${azurerm_container_registry.main.login_server}/backend:latest"
+      docker_registry_url = "https://${azurerm_container_registry.main.login_server}"
+      # docker_registry_username and password omitted — uses managed identity
     }
-    always_on     = var.app_service_sku != "F1" ? true : false
-    ftps_state    = "Disabled"
   }
 
   app_settings = {
-    WEBSITE_NODE_DEFAULT_VERSION = "20-lts"
+    WEBSITES_PORT                = "8080"
     NODE_ENV                     = "production"
-    PORT                         = "8080"
     MONGODB_URI                  = var.mongodb_uri
     JWT_SECRET                   = var.jwt_secret
-    SCM_DO_BUILD_DURING_DEPLOYMENT = "false"
+    ADMIN_SECRET                 = var.admin_secret
+    DOCKER_ENABLE_CI             = "true"
   }
 
   tags = var.tags
+}
+
+# -------------------- User Assigned Identity --------------------
+# Dedicated identity for the backend App Service to pull from ACR.
+resource "azurerm_user_assigned_identity" "backend" {
+  name                = "${var.app_name}-identity-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = var.tags
+}
+
+# -------------------- ACR Pull Role Assignment --------------------
+# Grants the App Service's managed identity permission to pull images from ACR.
+resource "azurerm_role_assignment" "acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.backend.principal_id
 }
 
 # -------------------- Static Web App (Frontend) --------------------

@@ -1,15 +1,16 @@
 # =============================================================
-# CI/CD Pipeline — GitHub Actions
+# CI/CD Pipeline — Containerized Backend + Static Frontend
 # =============================================================
 # Triggers:
 #   - Push to main branch
 #   - Pull requests targeting main
 #
-# Workflow:
-#   1. Lint & Test backend
-#   2. Build frontend
-#   3. Deploy backend to Azure App Service
-#   4. Deploy frontend to Azure Static Web Apps
+# Pipeline:
+#   1. Backend CI — lint & test
+#   2. Frontend CI — lint & build
+#   3. Build & push Docker image to Azure Container Registry
+#   4. Deploy backend container to Azure App Service
+#   5. Deploy frontend to Azure Static Web Apps
 # =============================================================
 
 name: CI/CD Pipeline
@@ -45,9 +46,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint (placeholder — add eslint)
-        run: echo "Linting passed (no linter configured)"
-
       - name: Run tests
         run: npm test
 
@@ -75,16 +73,9 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/dist/
-          retention-days: 1
-
-  # ---------- Deploy Backend to Azure App Service ----------
-  deploy-backend:
-    name: Deploy Backend
+  # ---------- Build & Push Docker Image to ACR ----------
+  build-and-push:
+    name: Build & Push Docker Image
     needs: [backend-ci]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -92,23 +83,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: backend/package-lock.json
+          login-server: ${{ vars.AZURE_ACR_LOGIN_SERVER }}
+          username: ${{ secrets.AZURE_ACR_USERNAME }}
+          password: ${{ secrets.AZURE_ACR_PASSWORD }}
 
-      - name: Install dependencies
-        run: npm ci
-        working-directory: backend
-
-      - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
+      - name: Build and push backend Docker image
+        uses: docker/build-push-action@v6
         with:
-          app-name: ${{ vars.AZURE_BACKEND_APP_NAME }}
-          publish-profile: ${{ secrets.AZURE_BACKEND_PUBLISH_PROFILE }}
-          package: backend/
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:latest
+            ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:${{ github.sha }}
+
+  # ---------- Deploy Backend (Container Restart) ----------
+  deploy-backend:
+    name: Deploy Backend
+    needs: [build-and-push]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Restart App Service to pull latest container
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az webapp restart --name ${{ vars.AZURE_BACKEND_APP_NAME }} \
+                              --resource-group ${{ vars.AZURE_RESOURCE_GROUP }}
 
   # ---------- Deploy Frontend to Azure Static Web Apps ----------
   deploy-frontend:
