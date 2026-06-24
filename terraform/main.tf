@@ -71,21 +71,16 @@ resource "azurerm_linux_web_app" "backend" {
   service_plan_id     = azurerm_service_plan.main.id
   https_only          = true
 
-  # User-assigned managed identity — used to pull images from ACR
-  identity {
-    type = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.backend.id]
-  }
-
   site_config {
     always_on  = var.app_service_sku != "F1" ? true : false
     ftps_state = "Disabled"
 
-    # Pull container from ACR using managed identity (no credentials needed)
+    # Pull container from ACR using admin credentials
     application_stack {
-      docker_image_name   = "${azurerm_container_registry.main.login_server}/backend:latest"
-      docker_registry_url = "https://${azurerm_container_registry.main.login_server}"
-      # docker_registry_username and password omitted — uses managed identity
+      docker_image_name          = "backend:latest"
+      docker_registry_url        = "https://${azurerm_container_registry.main.login_server}"
+      docker_registry_username   = azurerm_container_registry.main.admin_username
+      docker_registry_password   = azurerm_container_registry.main.admin_password
     }
   }
 
@@ -99,23 +94,6 @@ resource "azurerm_linux_web_app" "backend" {
   }
 
   tags = var.tags
-}
-
-# -------------------- User Assigned Identity --------------------
-# Dedicated identity for the backend App Service to pull from ACR.
-resource "azurerm_user_assigned_identity" "backend" {
-  name                = "${var.app_name}-identity-${random_string.suffix.result}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  tags                = var.tags
-}
-
-# -------------------- ACR Pull Role Assignment --------------------
-# Grants the App Service's managed identity permission to pull images from ACR.
-resource "azurerm_role_assignment" "acr_pull" {
-  scope                = azurerm_container_registry.main.id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_user_assigned_identity.backend.principal_id
 }
 
 # -------------------- Static Web App (Frontend) --------------------
