@@ -1,6 +1,9 @@
 /**
  * Task Routes
  * All routes require authentication (protect middleware).
+ *
+ * ⚠  Order matters: /stats must come before /:id to avoid "stats"
+ *    being matched as an ID parameter.
  */
 const express = require('express');
 const router = express.Router();
@@ -11,19 +14,23 @@ const {
   createTask,
   updateTask,
   deleteTask,
+  getTaskStats,
 } = require('../controllers/taskController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 // All task routes require authentication
 router.use(protect);
 
-// GET  /api/tasks       — list tasks (filtered by role)
+// GET  /api/tasks         — list tasks (filtered by role)
 router.get('/', getTasks);
 
-// GET  /api/tasks/:id   — get a single task
+// GET  /api/tasks/stats   — task stats per user (admin only)
+router.get('/stats', authorize('admin'), getTaskStats);
+
+// GET  /api/tasks/:id     — get a single task
 router.get('/:id', getTaskById);
 
-// POST /api/tasks       — create a task
+// POST /api/tasks         — create a task
 router.post(
   '/',
   [
@@ -32,7 +39,7 @@ router.post(
   createTask
 );
 
-// PUT  /api/tasks/:id   — update a task
+// PUT  /api/tasks/:id     — update a task
 router.put(
   '/:id',
   [
@@ -41,7 +48,7 @@ router.put(
   updateTask
 );
 
-// DELETE /api/tasks/:id — delete a task
+// DELETE /api/tasks/:id   — delete a task
 router.delete('/:id', deleteTask);
 
 module.exports = router;

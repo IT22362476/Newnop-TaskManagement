@@ -58,3 +58,7 @@ export const deleteTask = (id) => API.delete(`/tasks/${id}`);
 // -------------------- Users (admin) --------------------
 
 export const getUsers = () => API.get('/auth/users');
+
+// -------------------- Stats (admin) --------------------
+
+export const getTaskStats = () => API.get('/tasks/stats');
