@@ -85,7 +85,10 @@ resource "azurerm_linux_web_app" "backend" {
   }
 
   app_settings = {
+    # WEBSITES_PORT tells Azure which container port to route traffic to
     WEBSITES_PORT                = "8080"
+    # PORT must match WEBSITES_PORT — tells the Node app which port to listen on
+    PORT                         = "8080"
     NODE_ENV                     = "production"
     MONGODB_URI                  = var.mongodb_uri
     JWT_SECRET                   = var.jwt_secret
