@@ -22,7 +22,7 @@ on:
     branches: [main]
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 jobs:
   # ---------- Backend CI ----------
@@ -99,22 +99,6 @@ jobs:
           tags: |
             ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:latest
             ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:${{ github.sha }}
-
-  # ---------- Deploy Backend (Container Restart) ----------
-  deploy-backend:
-    name: Deploy Backend
-    needs: [build-and-push]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Restart App Service to pull latest container
-        uses: azure/cli@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            az webapp restart --name ${{ vars.AZURE_BACKEND_APP_NAME }} \
-                              --resource-group ${{ vars.AZURE_RESOURCE_GROUP }}
 
   # ---------- Deploy Frontend to Azure Static Web Apps ----------
   deploy-frontend:
