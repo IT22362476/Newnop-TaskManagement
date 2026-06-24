@@ -67,7 +67,6 @@ resource "azurerm_linux_web_app" "backend" {
     }
     always_on     = var.app_service_sku != "F1" ? true : false
     ftps_state    = "Disabled"
-    min_tls_version = "1.2"
   }
 
   app_settings = {
@@ -85,7 +84,7 @@ resource "azurerm_linux_web_app" "backend" {
 # -------------------- Static Web App (Frontend) --------------------
 resource "azurerm_static_web_app" "frontend" {
   name                = "${var.app_name}-web-${random_string.suffix.result}"
-  location            = "West US 2" # Static Web Apps only available in certain regions
+  location            = "eastasia"
   resource_group_name = azurerm_resource_group.main.name
   sku_tier            = var.static_web_app_sku_tier
   sku_size            = var.static_web_app_sku_size
