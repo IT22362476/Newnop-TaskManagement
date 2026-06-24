@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import TaskDashboard from './components/TaskDashboard';
+import MemberProgressPage from './components/MemberProgressPage';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -18,6 +19,23 @@ const ProtectedRoute = ({ children }) => {
     );
   }
   return user ? children : <Navigate to="/login" replace />;
+};
+
+const AdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <div className="w-8 h-8 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin" />
+          <span className="text-sm font-medium">Loading…</span>
+        </div>
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  return children;
 };
 
 const PublicRoute = ({ children }) => {
@@ -121,6 +139,7 @@ const AppRoutes = () => {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><TaskDashboard /></ProtectedRoute>} />
+      <Route path="/admin/members" element={<AdminRoute><MemberProgressPage /></AdminRoute>} />
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/'} replace />} />
     </Routes>
   );

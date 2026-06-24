@@ -249,4 +249,40 @@ const deleteTask = async (req, res) => {
   }
 };
 
-module.exports = { getTasks, getTaskById, createTask, updateTask, deleteTask };
+/**
+ * @route   GET /api/tasks/stats
+ * @desc    Get task statistics per user (admin only)
+ * @access  Private (admin)
+ */
+const getTaskStats = async (req, res) => {
+  try {
+    const users = await User.find().select('_id name email role').sort({ name: 1 });
+
+    const stats = await Promise.all(
+      users.map(async (user) => {
+        const [total, pending, inProgress, completed] = await Promise.all([
+          Task.countDocuments({ assignedTo: user._id }),
+          Task.countDocuments({ assignedTo: user._id, status: 'pending' }),
+          Task.countDocuments({ assignedTo: user._id, status: 'in-progress' }),
+          Task.countDocuments({ assignedTo: user._id, status: 'completed' }),
+        ]);
+
+        return {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          stats: { total, pending, inProgress, completed },
+          completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+        };
+      })
+    );
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Get task stats error:', error.message);
+    res.status(500).json({ message: 'Server error fetching stats' });
+  }
+};
+
+module.exports = { getTasks, getTaskById, createTask, updateTask, deleteTask, getTaskStats };
