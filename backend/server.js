@@ -13,11 +13,9 @@ dotenv.config();
 const app = express();
 
 // -------------------- Middleware --------------------
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
-  credentials: true,
-}));
-app.options('*', cors()); // Handle CORS preflight explicitly
+// Allow all origins (the API is public and auth is handled via JWT)
+app.use(cors());
+app.options('*', cors());
 app.use(express.json()); // Parse JSON request bodies
 
 // -------------------- Routes --------------------
