@@ -49,6 +49,13 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
+variable "admin_secret" {
+  description = "Secret code for registering admin users"
+  type        = string
+  sensitive   = true
+  default     = "admin_secret_change_me"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
