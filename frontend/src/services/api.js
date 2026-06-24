@@ -6,14 +6,9 @@ import axios from 'axios';
 
 /**
  * Determine the API base URL:
- * - In development (localhost): use the Vite proxy at '/api'
- * - In production: use the deployed backend URL (from VITE_API_URL env var)
- */
-/**
- * Determine the API base URL:
- * 1. Development: use Vite proxy (/api)
- * 2. Production: use VITE_API_URL (set via .env.production or env var)
- * 3. Fallback: detect if we're on Static Web Apps and use the backend directly
+ * 1. Development: Vite proxy at '/api'
+ * 2. Production: from VITE_API_URL env var + '/api' suffix
+ * 3. Fallback: detect Static Web Apps domain, use backend directly + '/api'
  */
 let API_BASE;
 
@@ -21,12 +16,12 @@ if (import.meta.env.DEV) {
   // Local dev — use Vite proxy to backend
   API_BASE = '/api';
 } else if (import.meta.env.VITE_API_URL) {
-  // Production with env var set — use the configured backend URL
-  API_BASE = import.meta.env.VITE_API_URL;
+  // Production with env var set — use the configured backend URL + /api prefix
+  API_BASE = import.meta.env.VITE_API_URL.replace(/\/+$/, '') + '/api';
 } else if (window.location.hostname.includes('azurestaticapps')) {
   // Deployed on Azure Static Web Apps but no VITE_API_URL set
-  // Use the backend URL directly (update this if backend URL changes)
-  API_BASE = 'https://newtaskmgmt-api-r6ykgn.azurewebsites.net';
+  // Use the backend URL directly + /api prefix (update this if backend URL changes)
+  API_BASE = 'https://newtaskmgmt-api-r6ykgn.azurewebsites.net/api';
 } else {
   // Fallback
   API_BASE = '/api';
