@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import TaskDashboard from './components/TaskDashboard';
 import MemberProgressPage from './components/MemberProgressPage';
 import './App.css';
@@ -145,10 +146,14 @@ const AppRoutes = () => {
   );
 };
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+
 const App = () => (
-  <AuthProvider>
-    <AppRoutes />
-  </AuthProvider>
+  <GoogleOAuthProvider clientId={googleClientId}>
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
+  </GoogleOAuthProvider>
 );
 
 export default App;

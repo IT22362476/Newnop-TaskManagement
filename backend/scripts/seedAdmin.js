@@ -5,7 +5,7 @@
  * Usage:
  *   node scripts/seedAdmin.js
  *
- * Alternatively, register with the matching ADMIN_SECRET via the API.
+ * Alternatively, an existing admin can promote users via the member progress page.
  */
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');

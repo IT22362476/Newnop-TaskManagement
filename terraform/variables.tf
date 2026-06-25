@@ -49,11 +49,10 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
-variable "admin_secret" {
-  description = "Secret code for registering admin users"
+variable "google_client_id" {
+  description = "Google OAuth Client ID (for Google Sign-In)"
   type        = string
-  sensitive   = true
-  default     = "admin_secret_change_me"
+  default     = ""
 }
 
 variable "tags" {

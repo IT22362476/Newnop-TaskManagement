@@ -9,7 +9,7 @@
 #   1. Backend CI — lint & test
 #   2. Frontend CI — lint & build
 #   3. Build & push Docker image to Azure Container Registry
-#   4. Deploy backend container to Azure App Service
+#   4. Restart backend container
 #   5. Deploy frontend to Azure Static Web Apps
 # =============================================================
 
@@ -111,23 +111,18 @@ jobs:
       - name: Restart App Service via Kudu API
         shell: bash
         run: |
-          # Save publish profile to temp file
           cat > /tmp/publish.xml << 'ENDOFXML'
           ${{ secrets.AZURE_BACKEND_PUBLISH_PROFILE }}
           ENDOFXML
 
-          # Use Python to parse XML and restart the app
           python3 << 'PYEOF'
           import xml.etree.ElementTree as ET
           import urllib.request
           import base64
-          import os
 
-          # Parse the publish profile XML
           tree = ET.parse('/tmp/publish.xml')
           root = tree.getroot()
 
-          # Find the SCM publish profile (has 'scm' in the URL)
           for profile in root.iter('{http://schemas.microsoft.com/developer/msbuild/2003}publishProfile'):
               url = profile.get('publishUrl', '')
               if 'scm' in url:
@@ -136,7 +131,6 @@ jobs:
                   password = profile.get('userPWD', '')
                   break
           else:
-              # Try without namespace
               for profile in root.iter('publishProfile'):
                   url = profile.get('publishUrl', '')
                   if 'scm' in url:
@@ -148,12 +142,9 @@ jobs:
           rest_url = f'https://{scm_url}/api/restart'
           print(f'Restarting via: {rest_url}')
 
-          # Create basic auth header
           auth_str = f'{username}:{password}'
-          auth_bytes = auth_str.encode('utf-8')
-          auth_b64 = base64.b64encode(auth_bytes).decode('utf-8')
+          auth_b64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
 
-          # Make the restart request
           req = urllib.request.Request(rest_url, method='POST')
           req.add_header('Authorization', f'Basic {auth_b64}')
           req.add_header('Content-Length', '0')
@@ -164,11 +155,9 @@ jobs:
                   print('Restart triggered successfully')
           except Exception as e:
               print(f'Restart result: {e}')
-              # Exit cleanly even if restart returns an error
               print('(App Service restart initiated - this is normal)')
           PYEOF
 
-          # Clean up
           rm -f /tmp/publish.xml
 
   # ---------- Deploy Frontend to Azure Static Web Apps ----------
@@ -192,10 +181,13 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Create .env.production with API URL
+      - name: Create .env.production
         run: |
           echo "VITE_API_URL=${{ vars.VITE_API_URL }}" > .env.production
-          echo "Using API URL: ${{ vars.VITE_API_URL }}"
+          echo "VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}" >> .env.production
+          echo "--- Build env vars ---"
+          echo "API URL: ${{ vars.VITE_API_URL }}"
+          echo "Google Client ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}"
         working-directory: frontend
         shell: bash
 
@@ -211,4 +203,3 @@ jobs:
           action: upload
           app_location: frontend
           output_location: dist
-          

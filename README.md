@@ -1,6 +1,7 @@
 # Task Management System
 
-A full-stack Task Management application with role-based access control, built with **React (Vite.js)**, **Express.js**, and **MongoDB**. Deployed to **Microsoft Azure** via **Terraform** and **GitHub Actions** CI/CD, with **n8n** workflow automation.
+A full-stack task management application with role-based access control.  
+**Live Demo:** [https://orange-flower-061b2cd00.7.azurestaticapps.net](https://orange-flower-061b2cd00.7.azurestaticapps.net)
 
 ---
 
@@ -8,58 +9,61 @@ A full-stack Task Management application with role-based access control, built w
 
 - **User Authentication** — Register, login, and JWT-based sessions
 - **Task CRUD** — Create, read, update, and delete tasks
-- **Role-Based Access** — Admins see all tasks; regular users see only their own
+- **Role-Based Access** — Admins see all tasks; users see only their own
+- **Admin Dashboard** — Member progress overview with completion stats
 - **Priority & Status** — Track task priority (low/medium/high) and status (pending/in-progress/completed)
-- **Responsive UI** — Mobile-friendly dashboard built with React + Vite
-- **Secure** — Passwords hashed with bcrypt, environment variables for secrets
+- **Daily Email Reminders** — Automated SendGrid notifications for overdue / due-today tasks
+- **Responsive UI** — Built with React + Tailwind CSS
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technology                        |
-| ------------ | --------------------------------- |
-| Frontend     | React 18, Vite.js, React Router   |
-| Backend      | Node.js, Express.js               |
-| Database     | MongoDB (via Mongoose)            |
-| Auth         | JWT (JSON Web Tokens)             |
-| IaC          | Terraform (Azure)                 |
-| CI/CD        | GitHub Actions                    |
-| Automation   | n8n                               |
+| Layer        | Technology                             |
+| ------------ | -------------------------------------- |
+| Frontend     | React 18, Vite.js, Tailwind CSS v4     |
+| Backend      | Node.js, Express.js                    |
+| Database     | MongoDB (Mongoose ODM)                 |
+| Auth         | JWT (JSON Web Tokens) + bcrypt         |
+| Email        | SendGrid (free tier)                   |
+| Deployment   | Azure App Service, Azure Static Web Apps |
+| CI/CD        | GitHub Actions                         |
+| IaC          | Terraform (Azure)                      |
 
 ---
 
 ## Project Structure
 
 ```
-├── backend/
-│   ├── config/          # Database connection
-│   ├── controllers/     # Route handlers (auth, tasks)
-│   ├── middleware/       # Auth middleware (JWT, roles)
-│   ├── models/          # Mongoose schemas (User, Task)
-│   ├── routes/          # Express routers
-│   ├── server.js        # Entry point
-│   └── package.json
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/  # React components
-│   │   ├── context/     # Auth & Task contexts
-│   │   ├── services/    # API client (axios)
-│   │   ├── App.jsx      # Root with routing
-│   │   └── main.jsx     # Entry point
-│   ├── index.html
-│   ├── vite.config.js
-│   └── package.json
-├── terraform/           # Azure IaC scripts
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-├── .github/workflows/   # CI/CD pipeline
-│   └── ci-cd.yml
-├── n8n/                 # n8n workflow export
-│   └── task_reminder_workflow.json
-└── README.md
+backend/
+├── config/          # Database connection
+├── controllers/     # Route handlers (auth, tasks)
+├── middleware/       # Auth middleware (JWT, roles)
+├── models/          # Mongoose schemas (User, Task)
+├── routes/          # Express routers
+├── scripts/         # Utilities (seed admin)
+├── server.js        # Entry point (includes cron reminders)
+├── Dockerfile       # Container build
+└── package.json
+
+frontend/
+├── public/
+├── src/
+│   ├── components/  # React components (Login, Register, Dashboard, etc.)
+│   ├── context/     # Auth & Task state management
+│   ├── services/    # Axios API client
+│   ├── App.jsx      # Routes & auth guards
+│   ├── App.css      # Tailwind import
+│   └── main.jsx     # Entry point
+├── index.html
+├── vite.config.js
+└── package.json
+
+terraform/           # Azure IaC (App Service, ACR, Static Web App)
+
+.github/workflows/   # CI/CD pipeline
+
+README.md
 ```
 
 ---
@@ -68,110 +72,95 @@ A full-stack Task Management application with role-based access control, built w
 
 ### Prerequisites
 
-- Node.js 20+
-- MongoDB (local or Atlas)
-- npm
+- **Node.js** 20+
+- **MongoDB** (local or Atlas)
+- **npm**
 
 ### 1. Clone & Install
 
 ```bash
 # Backend
 cd backend
-cp .env.example .env   # Edit .env with your MongoDB URI and JWT secret
+cp .env.example .env   # Edit with your MongoDB URI and JWT secret
 npm install
-npm run dev            # Starts on http://localhost:5000
+npm run dev             # Starts on http://localhost:5001
 
-# Frontend (in a separate terminal)
+# Frontend (separate terminal)
 cd frontend
 npm install
-npm run dev            # Starts on http://localhost:3000
+npm run dev             # Starts on http://localhost:3000
 ```
 
-### 2. Environment Variables (backend/.env)
+### 2. Environment Variables (`backend/.env`)
 
 ```env
 MONGODB_URI=mongodb://localhost:27017/taskmanagement
 JWT_SECRET=your_strong_secret_key
-PORT=5000
+ADMIN_SECRET=admin_secret_change_me
+PORT=5001
 NODE_ENV=development
+
+# Optional — for email reminders
+SENDGRID_API_KEY=your_sendgrid_api_key
+SENDGRID_FROM_EMAIL=reminders@yourdomain.com
 ```
 
-### 3. Usage
+### 3. Running the App
 
-1. Open `http://localhost:3000` in your browser
+1. Open `http://localhost:3000`
 2. Register a new account (default role: **user**)
-3. To test admin features, manually set `role: "admin"` in your MongoDB collection
-4. Create, edit, and delete tasks — admins see all tasks, users see only their own
+3. To create an admin, check **"Register as admin"** and enter the secret code from your `.env`
+4. Create, edit, and delete tasks
+5. Admins see all tasks; users see only their own + assigned
 
----
-
-## Deployment to Azure
-
-### Prerequisites
-
-- Azure subscription
-- Azure CLI (`az login`)
-- Terraform >= 1.5
-- MongoDB Atlas cluster (for production database)
-
-### Provision Infrastructure
+### 4. Seed an Admin (Alternative)
 
 ```bash
-cd terraform
-terraform init
-terraform plan -var="mongodb_uri=mongodb+srv://..." -var="jwt_secret=your_secret"
-terraform apply
+cd backend
+npm run seed
 ```
 
-### CI/CD via GitHub Actions
-
-1. Set the following **repository secrets** in your GitHub repo:
-
-| Secret                           | Description                            |
-| -------------------------------- | -------------------------------------- |
-| `AZURE_BACKEND_PUBLISH_PROFILE`  | Publish profile from Azure App Service |
-| `AZURE_STATIC_WEB_APPS_API_TOKEN`| Deployment token from Static Web App   |
-| `AZURE_BACKEND_APP_NAME`         | Name of the backend App Service        |
-
-2. Push to the `main` branch — the pipeline automatically builds and deploys.
-
----
-
-## n8n Workflow Automation
-
-The file `n8n/task_reminder_workflow.json` is a ready-to-import n8n workflow that:
-
-- Runs on a schedule (weekdays at 8:00 AM)
-- Fetches tasks from the API
-- Filters tasks that are overdue (not completed, past due date)
-- Sends an email reminder to the admin
-
-Import it into your n8n instance and configure the following environment variables in n8n:
-
-| Variable              | Description                          |
-| --------------------- | ------------------------------------ |
-| `BACKEND_API_URL`     | URL of your deployed backend         |
-| `ADMIN_JWT_TOKEN`     | A valid JWT token for an admin user  |
-| `ADMIN_EMAIL`         | Email address to receive reminders   |
-| `SMTP_FROM`           | SMTP sender address                  |
+Creates `admin@example.com` / `admin123456`.
 
 ---
 
 ## API Endpoints
 
-| Method   | Endpoint            | Auth   | Description          |
-| -------- | ------------------- | ------ | -------------------- |
-| `POST`   | `/api/auth/register`| Public | Register a new user  |
-| `POST`   | `/api/auth/login`   | Public | Login                |
-| `GET`    | `/api/auth/me`      | Private| Get current user     |
-| `GET`    | `/api/tasks`        | Private| List tasks (role-filtered) |
-| `GET`    | `/api/tasks/:id`    | Private| Get a single task    |
-| `POST`   | `/api/tasks`        | Private| Create a task        |
-| `PUT`    | `/api/tasks/:id`    | Private| Update a task        |
-| `DELETE` | `/api/tasks/:id`    | Private| Delete a task        |
+| Method   | Endpoint              | Auth    | Description                |
+| -------- | --------------------- | ------- | -------------------------- |
+| `POST`   | `/api/auth/register`  | Public  | Register a new user        |
+| `POST`   | `/api/auth/login`     | Public  | Login                      |
+| `GET`    | `/api/auth/me`        | Private | Get current user           |
+| `GET`    | `/api/auth/users`     | Admin   | List all users             |
+| `GET`    | `/api/tasks`          | Private | List tasks (role-filtered) |
+| `GET`    | `/api/tasks/stats`    | Admin   | Member task statistics     |
+| `GET`    | `/api/tasks/:id`      | Private | Get a single task          |
+| `POST`   | `/api/tasks`          | Private | Create a task              |
+| `PUT`    | `/api/tasks/:id`      | Private | Update a task              |
+| `DELETE` | `/api/tasks/:id`      | Private | Delete a task              |
+| `GET`    | `/api/health`         | Public  | Health check               |
 
 ---
 
-## License
+## Deployment
 
-MIT
+The project is deployed to Azure using Terraform and GitHub Actions.
+
+### Infrastructure
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+### CI/CD
+
+Push to `main` triggers the pipeline:
+1. Test backend
+2. Build frontend
+3. Build & push Docker image to Azure Container Registry
+4. Restart App Service (new container pulled)
+5. Deploy frontend to Azure Static Web Apps
+
+---

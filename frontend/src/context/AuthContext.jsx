@@ -38,12 +38,10 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [token]);
 
-  const register = useCallback(async (name, email, password, adminSecret) => {
+  const register = useCallback(async (name, email, password) => {
     setError(null);
     try {
-      const payload = { name, email, password };
-      if (adminSecret) payload.adminSecret = adminSecret;
-      const { data } = await apiRegister(payload);
+      const { data } = await apiRegister({ name, email, password });
       localStorage.setItem('token', data.token);
       setToken(data.token);
       setUser({ _id: data._id, name: data.name, email: data.email, role: data.role });

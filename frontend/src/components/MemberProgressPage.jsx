@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getTaskStats } from '../services/api';
+import { getTaskStats, promoteToAdmin } from '../services/api';
 import { TaskProvider } from '../context/TaskContext';
 
 const statusColors = {
@@ -16,15 +16,33 @@ const MemberProgressPageInner = () => {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [promoting, setPromoting] = useState(null);
 
-  useEffect(() => {
+  const fetchStats = () => {
+    setLoading(true);
     getTaskStats()
       .then((res) => setMembers(res.data))
       .catch((err) => setError(err.response?.data?.message || 'Failed to load stats'))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchStats(); }, []);
 
   const handleLogout = useCallback(() => { logout(); navigate('/login'); }, [logout, navigate]);
+
+  const handlePromote = async (userId, userName) => {
+    if (!window.confirm('Promote "' + userName + '" to admin? They will gain full access to all tasks.')) return;
+    setPromoting(userId);
+    try {
+      await promoteToAdmin(userId);
+      // Refresh the stats to show the updated role
+      fetchStats();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to promote user');
+    } finally {
+      setPromoting(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -109,6 +127,8 @@ const MemberProgressPageInner = () => {
             {members.map((member) => {
               const { total, completed, inProgress, pending } = member.stats;
               const rate = member.completionRate;
+              const isSelf = member._id === user?._id;
+              const canPromote = user?.role === 'admin' && member.role !== 'admin' && !isSelf;
 
               return (
                 <div key={member._id} className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition">
@@ -160,7 +180,7 @@ const MemberProgressPageInner = () => {
 
                   {/* Distribution bar */}
                   {total > 0 && (
-                    <div>
+                    <div className="mb-4">
                       <div className="flex justify-between text-xs text-slate-400 mb-1">
                         <span>Distribution</span>
                         <span>{pending} pending</span>
@@ -173,8 +193,17 @@ const MemberProgressPageInner = () => {
                     </div>
                   )}
 
-                  {total === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-2">No tasks assigned yet</p>
+                  {total === 0 && <p className="text-xs text-slate-400 text-center py-2 mb-4">No tasks assigned yet</p>}
+
+                  {/* Promote button — only shown for admins on non-admin users */}
+                  {canPromote && (
+                    <button
+                      onClick={() => handlePromote(member._id, member.name)}
+                      disabled={promoting === member._id}
+                      className="w-full py-2 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {promoting === member._id ? 'Promoting…' : 'Promote to Admin'}
+                    </button>
                   )}
                 </div>
               );

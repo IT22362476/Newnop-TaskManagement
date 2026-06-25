@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
-const { registerUser, loginUser, getMe, getUsers } = require('../controllers/authController');
+const { registerUser, loginUser, getMe, getUsers, promoteToAdmin, googleLogin } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 // POST /api/auth/register
@@ -35,5 +35,11 @@ router.get('/me', protect, getMe);
 
 // GET /api/auth/users — admin only (for task assignment dropdown)
 router.get('/users', protect, authorize('admin'), getUsers);
+
+// PATCH /api/auth/users/:id/promote — admin only (promote user to admin)
+router.patch('/users/:id/promote', protect, authorize('admin'), promoteToAdmin);
+
+// POST /api/auth/google — authenticate with Google ID token
+router.post('/google', googleLogin);
 
 module.exports = router;

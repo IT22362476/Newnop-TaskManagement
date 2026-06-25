@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
+import { googleLogin as apiGoogleLogin } from '../services/api';
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -19,10 +23,17 @@ const Login = () => {
     try {
       await login(form.email, form.password);
       navigate('/dashboard');
-    } catch {
-      /* error set in context */
-    } finally {
-      setSubmitting(false);
+    } catch { /* error in context */ }
+    finally { setSubmitting(false); }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    try {
+      const { data } = await apiGoogleLogin(credentialResponse.credential);
+      localStorage.setItem('token', data.token);
+      window.location.href = '/dashboard';
+    } catch (err) {
+      alert(err.response?.data?.message || 'Google sign-in failed');
     }
   };
 
@@ -53,49 +64,44 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={handleChange}
-                required
-                autoComplete="email"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                placeholder="you@example.com"
-              />
+              <input id="email" name="email" type="email" value={form.email} onChange={handleChange} required autoComplete="email"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                placeholder="you@example.com" />
             </div>
-
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                value={form.password}
-                onChange={handleChange}
-                required
-                autoComplete="current-password"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                placeholder="Your password"
-              />
+              <input id="password" name="password" type="password" value={form.password} onChange={handleChange} required autoComplete="current-password"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                placeholder="Your password" />
             </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-            >
+            <button type="submit" disabled={submitting}
+              className="w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2">
               {submitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in…
-                </>
-              ) : (
-                'Sign In'
-              )}
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Signing in…</>
+              ) : 'Sign In'}
             </button>
           </form>
+
+          {/* Google Sign-In — only shown if client ID is configured */}
+          {googleClientId && (
+            <>
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-xs text-slate-400 font-medium">OR</span>
+                <div className="flex-1 h-px bg-slate-200" />
+              </div>
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => alert('Google sign-in failed')}
+                  size="large"
+                  shape="rectangular"
+                  text="signin_with"
+                  logo_alignment="center"
+                />
+              </div>
+            </>
+          )}
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-500">

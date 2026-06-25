@@ -92,7 +92,7 @@ resource "azurerm_linux_web_app" "backend" {
     NODE_ENV                     = "production"
     MONGODB_URI                  = var.mongodb_uri
     JWT_SECRET                   = var.jwt_secret
-    ADMIN_SECRET                 = var.admin_secret
+    GOOGLE_CLIENT_ID             = var.google_client_id
     DOCKER_ENABLE_CI             = "true"
   }
 

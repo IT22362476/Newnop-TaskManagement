@@ -58,7 +58,12 @@ export const deleteTask = (id) => API.delete(`/tasks/${id}`);
 // -------------------- Users (admin) --------------------
 
 export const getUsers = () => API.get('/auth/users');
+export const promoteToAdmin = (userId) => API.patch(`/auth/users/${userId}/promote`);
 
 // -------------------- Stats (admin) --------------------
 
 export const getTaskStats = () => API.get('/tasks/stats');
+
+// -------------------- Google Auth --------------------
+
+export const googleLogin = (credential) => API.post('/auth/google', { credential });
