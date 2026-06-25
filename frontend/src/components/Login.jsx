@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Swal from 'sweetalert2';
 import { GoogleLogin } from '@react-oauth/google';
 import { googleLogin as apiGoogleLogin } from '../services/api';
 
@@ -33,7 +34,12 @@ const Login = () => {
       localStorage.setItem('token', data.token);
       window.location.href = '/dashboard';
     } catch (err) {
-      alert(err.response?.data?.message || 'Google sign-in failed');
+      Swal.fire({
+        title: 'Sign-In Failed',
+        text: err.response?.data?.message || 'Google sign-in failed',
+        icon: 'error',
+        confirmButtonColor: '#4f46e5',
+      });
     }
   };
 
@@ -93,7 +99,7 @@ const Login = () => {
               <div className="flex justify-center">
                 <GoogleLogin
                   onSuccess={handleGoogleSuccess}
-                  onError={() => alert('Google sign-in failed')}
+                  onError={() => Swal.fire({ title: 'Sign-In Failed', text: 'Google sign-in failed', icon: 'error', confirmButtonColor: '#4f46e5' })}
                   size="large"
                   shape="rectangular"
                   text="signin_with"

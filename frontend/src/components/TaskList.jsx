@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { useTasks } from '../context/TaskContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -28,7 +29,7 @@ const TaskList = ({ onEdit }) => {
   const isAdmin = user?.role === 'admin';
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    const confirmDelete = await Swal.fire({ title: 'Delete task?', text: 'Are you sure you want to delete this task?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Delete', cancelButtonText: 'Cancel' }); if (!confirmDelete.isConfirmed) return;
     try {
       await deleteTask(id);
     } catch {

@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -31,14 +32,28 @@ const MemberProgressPageInner = () => {
   const handleLogout = useCallback(() => { logout(); navigate('/login'); }, [logout, navigate]);
 
   const handlePromote = async (userId, userName) => {
-    if (!window.confirm('Promote "' + userName + '" to admin? They will gain full access to all tasks.')) return;
+    const { isConfirmed } = await Swal.fire({
+      title: 'Promote to Admin?',
+      text: `Promote "${userName}" to admin? They will gain full access to all tasks.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#4f46e5',
+      confirmButtonText: 'Promote',
+      cancelButtonText: 'Cancel',
+    });
+    if (!isConfirmed) return;
     setPromoting(userId);
     try {
       await promoteToAdmin(userId);
       // Refresh the stats to show the updated role
       fetchStats();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to promote user');
+      Swal.fire({
+        title: 'Error',
+        text: err.response?.data?.message || 'Failed to promote user',
+        icon: 'error',
+        confirmButtonColor: '#4f46e5',
+      });
     } finally {
       setPromoting(null);
     }
