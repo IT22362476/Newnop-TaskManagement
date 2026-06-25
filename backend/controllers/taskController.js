@@ -24,7 +24,7 @@ const getTasks = async (req, res) => {
     if (req.user.role === 'admin') {
       // Admin: fetch all tasks, populate creator and assignee info
       tasks = await Task.find()
-        .populate('createdBy', 'name email')
+        .populate('createdBy', 'name email role')
         .populate('assignedTo', 'name email')
         .sort({ createdAt: -1 });
     } else {
@@ -35,7 +35,7 @@ const getTasks = async (req, res) => {
           { assignedTo: req.user._id },
         ],
       })
-        .populate('createdBy', 'name email')
+        .populate('createdBy', 'name email role')
         .populate('assignedTo', 'name email')
         .sort({ createdAt: -1 });
     }
@@ -55,7 +55,7 @@ const getTasks = async (req, res) => {
 const getTaskById = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
-      .populate('createdBy', 'name email')
+      .populate('createdBy', 'name email role')
       .populate('assignedTo', 'name email');
 
     if (!task) {
@@ -132,7 +132,7 @@ const createTask = async (req, res) => {
 
     // Return with populated fields
     const populatedTask = await Task.findById(task._id)
-      .populate('createdBy', 'name email')
+      .populate('createdBy', 'name email role')
       .populate('assignedTo', 'name email');
 
     res.status(201).json(populatedTask);
@@ -198,7 +198,7 @@ const updateTask = async (req, res) => {
     const updatedTask = await task.save();
 
     const populatedTask = await Task.findById(updatedTask._id)
-      .populate('createdBy', 'name email')
+      .populate('createdBy', 'name email role')
       .populate('assignedTo', 'name email');
 
     res.json(populatedTask);

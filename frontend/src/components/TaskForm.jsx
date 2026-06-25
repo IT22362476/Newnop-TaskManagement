@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+const todayStr = new Date().toISOString().split('T')[0];
+
 const INITIAL_STATE = {
   title: '',
   description: '',
@@ -158,7 +160,8 @@ const TaskForm = ({ initialData, onSubmit, onCancel, userRole, users }) => {
                 name="priority"
                 value={form.priority}
                 onChange={handleChange}
-                className={inputClass}
+                disabled={isRestricted}
+                className={inputClass + (isRestricted ? " bg-gray-100 cursor-not-allowed" : "")}
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -173,9 +176,11 @@ const TaskForm = ({ initialData, onSubmit, onCancel, userRole, users }) => {
                 id="tf-dueDate"
                 name="dueDate"
                 type="date"
+                min={todayStr}
                 value={form.dueDate}
                 onChange={handleChange}
-                className={inputClass}
+                disabled={isRestricted}
+                className={inputClass + (isRestricted ? " bg-gray-100 cursor-not-allowed" : "")}
               />
             </div>
           </div>
