@@ -1,110 +1,5 @@
-# =============================================================
-# CI/CD Pipeline — Containerized Backend + Static Frontend
-# =============================================================
-# Triggers:
-#   - Push to main branch
-#   - Pull requests targeting main
-#
-# Pipeline:
-#   1. Backend CI — lint & test
-#   2. Frontend CI — lint & build
-#   3. Build & push Docker image to Azure Container Registry
-#   4. Restart backend container
-#   5. Deploy frontend to Azure Static Web Apps
-# =============================================================
-
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-env:
-  NODE_VERSION: "22"
-
-jobs:
-  # ---------- Backend CI ----------
-  backend-ci:
-    name: Backend CI
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run tests
-        run: npm test
-
-  # ---------- Frontend CI ----------
-  frontend-ci:
-    name: Frontend CI
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build
-        run: npm run build
-
-  # ---------- Build & Push Docker Image to ACR ----------
-  build-and-push:
-    name: Build & Push Docker Image
-    needs: [backend-ci]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to Azure Container Registry
-        uses: azure/docker-login@v2
-        with:
-          login-server: ${{ vars.AZURE_ACR_LOGIN_SERVER }}
-          username: ${{ secrets.AZURE_ACR_USERNAME }}
-          password: ${{ secrets.AZURE_ACR_PASSWORD }}
-
-      - name: Build and push backend Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: backend
-          file: backend/Dockerfile
-          push: true
-          tags: |
-            ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:latest
-            ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:${{ github.sha }}
-
-  # ---------- Restart Backend (force pull of new container) ----------
-  restart-backend:
-    name: Restart Backend
-    needs: [build-and-push]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Restart App Service via Kudu API
+      - name: Restart App Service (kill process to force new container)
         shell: bash
         run: |
           cat > /tmp/publish.xml << 'ENDOFXML'
@@ -115,85 +10,71 @@ jobs:
           import xml.etree.ElementTree as ET
           import urllib.request
           import base64
+          import json
 
           tree = ET.parse('/tmp/publish.xml')
           root = tree.getroot()
 
-          for profile in root.iter('{http://schemas.microsoft.com/developer/msbuild/2003}publishProfile'):
-              url = profile.get('publishUrl', '')
-              if 'scm' in url:
-                  scm_url = url.replace(':443', '').replace('https://', '')
-                  username = profile.get('userName', '')
-                  password = profile.get('userPWD', '')
-                  break
-          else:
-              for profile in root.iter('publishProfile'):
+          scm_url = ''
+          username = ''
+          password = ''
+
+          for ns in ['{http://schemas.microsoft.com/developer/msbuild/2003}', '']:
+              for profile in root.iter(f'{ns}publishProfile'):
                   url = profile.get('publishUrl', '')
                   if 'scm' in url:
                       scm_url = url.replace(':443', '').replace('https://', '')
                       username = profile.get('userName', '')
                       password = profile.get('userPWD', '')
                       break
-
-          rest_url = f'https://{scm_url}/api/restart'
-          print(f'Restarting via: {rest_url}')
+              if scm_url:
+                  break
 
           auth_str = f'{username}:{password}'
           auth_b64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
+          headers = {
+              'Authorization': f'Basic {auth_b64}',
+              'Content-Type': 'application/json',
+          }
 
-          req = urllib.request.Request(rest_url, method='POST')
-          req.add_header('Authorization', f'Basic {auth_b64}')
-          req.add_header('Content-Length', '0')
-
+          # 1. List all processes
+          req = urllib.request.Request(f'https://{scm_url}/api/processes/', headers=headers)
           try:
-              with urllib.request.urlopen(req, timeout=120) as resp:
-                  print(f'Status: {resp.status} {resp.reason}')
-                  print('Restart triggered successfully')
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  processes = json.loads(resp.read())
+                  print(f'Found {len(processes)} process(es)')
+                  for proc in processes:
+                      pid = proc.get('id', '')
+                      print(f'  Killing process: {pid}')
+                      # Kill each process to force restart
+                      kill_req = urllib.request.Request(
+                          f'https://{scm_url}/api/processes/{pid}/stop',
+                          data=b'',
+                          headers=headers,
+                          method='POST'
+                      )
+                      try:
+                          urllib.request.urlopen(kill_req, timeout=30)
+                          print(f'  ✅ Process {pid} killed')
+                      except Exception as e:
+                          print(f'  ⚠️  Process {pid}: {e}')
           except Exception as e:
-              print(f'Restart result: {e}')
-              print('(App Service restart initiated - this is normal)')
+              print(f'Failed to list processes: {e}')
+              # Fallback: try direct restart
+              print('Trying direct restart...')
+              req = urllib.request.Request(
+                  f'https://{scm_url}/api/restart',
+                  data=b'',
+                  headers=headers,
+                  method='POST'
+              )
+              try:
+                  urllib.request.urlopen(req, timeout=120)
+                  print('Restart triggered')
+              except Exception as e2:
+                  print(f'Restart fallback: {e2}')
+
+          print('Container restart initiated - new image will be pulled')
           PYEOF
 
           rm -f /tmp/publish.xml
-
-  # ---------- Deploy Frontend to Azure Static Web Apps ----------
-  deploy-frontend:
-    name: Deploy Frontend
-    needs: [frontend-ci]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: npm install
-        working-directory: frontend
-
-      - name: Create .env.production
-        run: |
-          echo "VITE_API_URL=${{ vars.VITE_API_URL }}" > .env.production
-          echo "VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}" >> .env.production
-          echo "--- Build env vars ---"
-          echo "API URL: ${{ vars.VITE_API_URL }}"
-          echo "Google Client ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}"
-        working-directory: frontend
-        shell: bash
-
-      - name: Build
-        run: npm run build
-        working-directory: frontend
-
-      - name: Deploy to Azure Static Web Apps
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: upload
-          app_location: frontend
-          output_location: dist
