@@ -40,6 +40,10 @@ router.get('/users', protect, authorize('admin'), getUsers);
 router.patch('/users/:id/promote', protect, authorize('admin'), promoteToAdmin);
 
 // POST /api/auth/google — authenticate with Google ID token
-router.post('/google', googleLogin);
+router.post('/google', (req, res, next) => {
+  console.log('POST /google route hit');
+  console.log('Body:', req.body);
+  next();
+}, googleLogin);
 
 module.exports = router;
