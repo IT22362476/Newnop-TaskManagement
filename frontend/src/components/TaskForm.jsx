@@ -30,7 +30,15 @@ const TaskForm = ({ initialData, onSubmit, onCancel, userRole, users }) => {
     }
   }, [initialData]);
 
-  const handleChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+  // Don't allow priority/dueDate changes when a regular user edits an admin's task
+  const isRestricted =
+    userRole === 'user' &&
+    initialData?.createdBy?.role === 'admin';
+
+  const handleChange = (e) => {
+    if (isRestricted && (e.target.name === 'priority' || e.target.name === 'dueDate')) return;
+    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
