@@ -1,17 +1,6 @@
 # =============================================================
 # CI/CD Pipeline — Containerized Backend + Static Frontend
 # =============================================================
-# Triggers:
-#   - Push to main branch
-#   - Pull requests targeting main
-#
-# Pipeline:
-#   1. Backend CI — lint & test
-#   2. Frontend CI — lint & build
-#   3. Build & push Docker image to Azure Container Registry
-#   4. Restart backend container
-#   5. Deploy frontend to Azure Static Web Apps
-# =============================================================
 
 name: CI/CD Pipeline
 
@@ -96,7 +85,7 @@ jobs:
             ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:latest
             ${{ vars.AZURE_ACR_LOGIN_SERVER }}/backend:${{ github.sha }}
 
-  # ---------- Restart Backend (force pull of new container) ----------
+  # ---------- Restart Backend (force new container pull) ----------
   restart-backend:
     name: Restart Backend
     needs: [build-and-push]
@@ -104,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Restart App Service via Kudu API
+      - name: Restart App Service (kill process to force new container)
         shell: bash
         run: |
           cat > /tmp/publish.xml << 'ENDOFXML'
@@ -112,48 +101,54 @@ jobs:
           ENDOFXML
 
           python3 << 'PYEOF'
-          import xml.etree.ElementTree as ET
-          import urllib.request
-          import base64
+          import xml.etree.ElementTree as ET, urllib.request, base64, json
 
           tree = ET.parse('/tmp/publish.xml')
           root = tree.getroot()
 
-          for profile in root.iter('{http://schemas.microsoft.com/developer/msbuild/2003}publishProfile'):
-              url = profile.get('publishUrl', '')
-              if 'scm' in url:
-                  scm_url = url.replace(':443', '').replace('https://', '')
-                  username = profile.get('userName', '')
-                  password = profile.get('userPWD', '')
-                  break
-          else:
-              for profile in root.iter('publishProfile'):
-                  url = profile.get('publishUrl', '')
+          scm_url = username = password = ''
+          for ns in ['{http://schemas.microsoft.com/developer/msbuild/2003}', '']:
+              for p in root.iter(f'{ns}publishProfile'):
+                  url = p.get('publishUrl', '')
                   if 'scm' in url:
                       scm_url = url.replace(':443', '').replace('https://', '')
-                      username = profile.get('userName', '')
-                      password = profile.get('userPWD', '')
+                      username = p.get('userName', '')
+                      password = p.get('userPWD', '')
                       break
+              if scm_url: break
 
-          rest_url = f'https://{scm_url}/api/restart'
-          print(f'Restarting via: {rest_url}')
+          auth = base64.b64encode(f'{username}:{password}'.encode()).decode()
+          headers = {'Authorization': f'Basic {auth}', 'Content-Type': 'application/json'}
 
-          auth_str = f'{username}:{password}'
-          auth_b64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-
-          req = urllib.request.Request(rest_url, method='POST')
-          req.add_header('Authorization', f'Basic {auth_b64}')
-          req.add_header('Content-Length', '0')
-
+          # Kill all processes to force container restart
+          req = urllib.request.Request(f'https://{scm_url}/api/processes/', headers=headers)
           try:
-              with urllib.request.urlopen(req, timeout=120) as resp:
-                  print(f'Status: {resp.status} {resp.reason}')
-                  print('Restart triggered successfully')
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  for proc in json.loads(resp.read()):
+                      pid = proc.get('id', '')
+                      print(f'Killing process: {pid}')
+                      try:
+                          urllib.request.urlopen(
+                              urllib.request.Request(f'https://{scm_url}/api/processes/{pid}/stop', data=b'', headers=headers, method='POST'),
+                              timeout=30
+                          )
+                          print(f'  ✅ {pid} killed')
+                      except Exception as e:
+                          print(f'  ⚠️  {e}')
           except Exception as e:
-              print(f'Restart result: {e}')
-              print('(App Service restart initiated - this is normal)')
-          PYEOF
+              print(f'Process list failed: {e}')
+              # Fallback
+              try:
+                  urllib.request.urlopen(
+                      urllib.request.Request(f'https://{scm_url}/api/restart', data=b'', headers=headers, method='POST'),
+                      timeout=120
+                  )
+                  print('Restart triggered')
+              except Exception as e2:
+                  print(f'Restart fallback: {e2}')
 
+          print('Container restart initiated')
+          PYEOF
           rm -f /tmp/publish.xml
 
   # ---------- Deploy Frontend to Azure Static Web Apps ----------
@@ -179,9 +174,6 @@ jobs:
         run: |
           echo "VITE_API_URL=${{ vars.VITE_API_URL }}" > .env.production
           echo "VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}" >> .env.production
-          echo "--- Build env vars ---"
-          echo "API URL: ${{ vars.VITE_API_URL }}"
-          echo "Google Client ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}"
         working-directory: frontend
         shell: bash
 
